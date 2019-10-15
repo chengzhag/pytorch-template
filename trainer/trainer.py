@@ -54,7 +54,10 @@ class Trainer(BaseTrainer):
                 self.train_metrics.update(met.__name__, met(output, target))
 
             toc = datetime.now()
-            speed = toc - tic
+            try:
+                speed = 0.95 * speed + 0.05 * (toc - tic)
+            except:
+                speed = toc - tic
             eta = speed * (self.len_epoch - batch_idx - 1 + (self.epochs - epoch) * self.len_epoch)
             tic = toc
 
@@ -102,7 +105,10 @@ class Trainer(BaseTrainer):
                 self.writer.add_image('input', make_grid(data.cpu(), nrow=8, normalize=True))
 
                 toc = datetime.now()
-                speed = toc - tic
+                try:
+                    speed = 0.95 * speed + 0.05 * (toc - tic)
+                except:
+                    speed = toc - tic
                 eta = speed * (len(self.valid_data_loader) - batch_idx)
                 tic = toc
 
