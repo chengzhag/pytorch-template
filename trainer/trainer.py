@@ -3,7 +3,7 @@ import torch
 from torchvision.utils import make_grid
 from base import BaseTrainer
 from utils import inf_loop, MetricTracker
-
+from datetime import datetime, timedelta
 
 class Trainer(BaseTrainer):
     """
@@ -38,6 +38,7 @@ class Trainer(BaseTrainer):
         """
         self.model.train()
         self.train_metrics.reset()
+        tic = datetime.now()
         for batch_idx, (data, target) in enumerate(self.data_loader):
             data, target = data.to(self.device), target.to(self.device)
 
@@ -52,11 +53,17 @@ class Trainer(BaseTrainer):
             for met in self.metric_ftns:
                 self.train_metrics.update(met.__name__, met(output, target))
 
+            toc = datetime.now()
+            speed = toc - tic
+            eta = speed * (self.len_epoch - batch_idx - 1 + (self.epochs - epoch) * self.len_epoch)
+            tic = toc
+
             if batch_idx % self.log_step == 0:
-                self.logger.debug('Train Epoch: {} {} Loss: {:.6f}'.format(
+                self.logger.debug('Train Epoch: {} {}, Loss: {:.6f}, ETA: {}'.format(
                     epoch,
                     self._progress(batch_idx),
-                    loss.item()))
+                    loss.item(),
+                    timedelta(seconds=eta.seconds)))
                 self.writer.add_image('input', make_grid(data.cpu(), nrow=8, normalize=True))
 
             if batch_idx == self.len_epoch:
@@ -81,6 +88,7 @@ class Trainer(BaseTrainer):
         self.model.eval()
         self.valid_metrics.reset()
         with torch.no_grad():
+            tic = datetime.now()
             for batch_idx, (data, target) in enumerate(self.valid_data_loader):
                 data, target = data.to(self.device), target.to(self.device)
 
@@ -92,6 +100,22 @@ class Trainer(BaseTrainer):
                 for met in self.metric_ftns:
                     self.valid_metrics.update(met.__name__, met(output, target))
                 self.writer.add_image('input', make_grid(data.cpu(), nrow=8, normalize=True))
+
+                toc = datetime.now()
+                speed = toc - tic
+                eta = speed * (len(self.valid_data_loader) - batch_idx)
+                tic = toc
+
+                if batch_idx % self.log_step == 0:
+                    current = batch_idx * self.valid_data_loader.batch_size
+                    n_samples = len(self.valid_data_loader.sampler)
+                    self.logger.debug('Test Epoch: {} [{}/{} ({:.0f}%)], ETA: {}'.format(
+                        epoch,
+                        current,
+                        n_samples,
+                        100.0 * current / n_samples,
+                        timedelta(seconds=eta.seconds)
+                    ))
 
         # add histogram of model parameters to the tensorboard
         for name, p in self.model.named_parameters():
