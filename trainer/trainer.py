@@ -4,6 +4,7 @@ from torchvision.utils import make_grid
 from base import BaseTrainer
 from utils import inf_loop, MetricTracker
 from datetime import datetime, timedelta
+import wandb
 
 class Trainer(BaseTrainer):
     """
@@ -28,6 +29,8 @@ class Trainer(BaseTrainer):
 
         self.train_metrics = MetricTracker('loss', *[m.__name__ for m in self.metric_ftns], writer=self.writer)
         self.valid_metrics = MetricTracker('loss', *[m.__name__ for m in self.metric_ftns], writer=self.writer)
+
+        wandb.watch(self.model, log='all')
 
     def _train_epoch(self, epoch):
         """

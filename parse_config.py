@@ -6,6 +6,7 @@ from operator import getitem
 from datetime import datetime
 from logger import setup_logging
 from utils import read_json, write_json
+import wandb
 
 
 class ConfigParser:
@@ -45,6 +46,8 @@ class ConfigParser:
             1: logging.INFO,
             2: logging.DEBUG
         }
+
+        wandb.config.update(config)
 
     @classmethod
     def from_args(cls, args, options=''):

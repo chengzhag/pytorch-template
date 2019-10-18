@@ -8,6 +8,9 @@ import model.metric as module_metric
 import model.model as module_arch
 from parse_config import ConfigParser
 from trainer import Trainer
+import os
+import wandb
+wandb.init(project=os.path.realpath(__file__).split('/')[-2], sync_tensorboard=True)
 
 
 # fix random seeds for reproducibility
