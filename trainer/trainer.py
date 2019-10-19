@@ -4,7 +4,6 @@ from torchvision.utils import make_grid
 from base import BaseTrainer
 from utils import inf_loop, MetricTracker
 from datetime import datetime, timedelta
-import wandb
 
 class Trainer(BaseTrainer):
     """
@@ -27,10 +26,8 @@ class Trainer(BaseTrainer):
         self.lr_scheduler = lr_scheduler
         self.log_step = int(np.sqrt(data_loader.batch_size))
 
-        self.train_metrics = MetricTracker('loss', *[m.__name__ for m in self.metric_ftns], writer=self.writer)
-        self.valid_metrics = MetricTracker('loss', *[m.__name__ for m in self.metric_ftns], writer=self.writer)
-
-        wandb.watch(self.model, log='all')
+        self.train_metrics = MetricTracker(writer=self.writer)
+        self.valid_metrics = MetricTracker()
 
     def _train_epoch(self, epoch):
         """
@@ -45,16 +42,18 @@ class Trainer(BaseTrainer):
         for batch_idx, (data, target) in enumerate(self.data_loader):
             data, target = data.to(self.device), target.to(self.device)
 
+            do_log = batch_idx % self.log_step == 0
+
             self.optimizer.zero_grad()
             output = self.model(data)
             loss = self.criterion(output, target)
             loss.backward()
             self.optimizer.step()
 
-            self.writer.set_step((epoch - 1) * self.len_epoch + batch_idx)
-            self.train_metrics.update('loss', loss.item())
-            for met in self.metric_ftns:
-                self.train_metrics.update(met.__name__, met(output, target))
+            self.writer.set_step((epoch - 1) * self.len_epoch + batch_idx, log=do_log)
+            tag_scalar_dict = {'loss': loss.item()}
+            tag_scalar_dict.update({met.__name__: met(output, target) for met in self.metric_ftns})
+            self.train_metrics.update(tag_scalar_dict, log=do_log)
 
             toc = datetime.now()
             try:
@@ -64,16 +63,17 @@ class Trainer(BaseTrainer):
             eta = speed * (self.len_epoch - batch_idx - 1 + (self.epochs - epoch) * self.len_epoch)
             tic = toc
 
-            if batch_idx % self.log_step == 0:
+            if do_log:
                 self.logger.debug('Train Epoch: {} {}, Loss: {:.6f}, ETA: {}'.format(
                     epoch,
                     self._progress(batch_idx),
                     loss.item(),
                     timedelta(seconds=eta.seconds)))
-                self.writer.add_image('input', make_grid(data.cpu(), nrow=8, normalize=True))
 
             if batch_idx == self.len_epoch:
                 break
+
+        self.writer.add_image('input', make_grid(data.cpu(), nrow=8, normalize=True))
         log = self.train_metrics.result()
 
         if self.do_validation:
@@ -98,14 +98,17 @@ class Trainer(BaseTrainer):
             for batch_idx, (data, target) in enumerate(self.valid_data_loader):
                 data, target = data.to(self.device), target.to(self.device)
 
+                do_log = batch_idx % self.log_step == 0
+
                 output = self.model(data)
                 loss = self.criterion(output, target)
 
-                self.writer.set_step((epoch - 1) * len(self.valid_data_loader) + batch_idx, 'valid')
-                self.valid_metrics.update('loss', loss.item())
-                for met in self.metric_ftns:
-                    self.valid_metrics.update(met.__name__, met(output, target))
-                self.writer.add_image('input', make_grid(data.cpu(), nrow=8, normalize=True))
+                self.writer.set_step(mode='valid', log=True)
+                tag_scalar_dict = {'loss': loss.item()}
+                tag_scalar_dict.update({met.__name__: met(output, target) for met in self.metric_ftns})
+                self.valid_metrics.update(tag_scalar_dict, log=do_log)
+                if do_log:
+                    self.writer.add_image('input', make_grid(data.cpu(), nrow=8, normalize=True))
 
                 toc = datetime.now()
                 try:
@@ -115,7 +118,7 @@ class Trainer(BaseTrainer):
                 eta = speed * (len(self.valid_data_loader) - batch_idx)
                 tic = toc
 
-                if batch_idx % self.log_step == 0:
+                if do_log:
                     current = batch_idx * self.valid_data_loader.batch_size
                     n_samples = len(self.valid_data_loader.sampler)
                     self.logger.debug('Test Epoch: {} [{}/{} ({:.0f}%)], ETA: {}'.format(
@@ -126,9 +129,13 @@ class Trainer(BaseTrainer):
                         timedelta(seconds=eta.seconds)
                     ))
 
-        # add histogram of model parameters to the tensorboard
-        for name, p in self.model.named_parameters():
-            self.writer.add_histogram(name, p, bins='auto')
+        for key, value in self.valid_metrics.result().items():
+            self.writer.add_scalar(key, value)
+            
+        # add histogram of valid results to the tensorboard
+        for name, p in self.valid_metrics.to_dict().items():
+            self.writer.add_histogram(name + '_h', p, bins='auto')
+
         return self.valid_metrics.result()
 
     def _progress(self, batch_idx):

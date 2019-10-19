@@ -29,6 +29,7 @@ def main(config):
 
     # build model architecture, then print to console
     model = config.init_obj('arch', module_arch)
+    wandb.watch(model, log='all')
     logger.info(model)
 
     # get function handles of loss and metrics

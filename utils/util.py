@@ -26,24 +26,25 @@ def inf_loop(data_loader):
         yield from loader
 
 class MetricTracker:
-    def __init__(self, *keys, writer=None):
+    def __init__(self, writer=None):
         self.writer = writer
-        self._data = pd.DataFrame(index=keys, columns=['total', 'counts', 'average'])
+        self._data = pd.DataFrame()
         self.reset()
         
     def reset(self):
-        for col in self._data.columns:
-            self._data[col].values[:] = 0
+        self._data = pd.DataFrame()
 
-    def update(self, key, value, n=1):
-        if self.writer is not None:
-            self.writer.add_scalar(key, value)
-        self._data.total[key] += value * n
-        self._data.counts[key] += n
-        self._data.average[key] = self._data.total[key] / self._data.counts[key]
+    def update(self, tag_scalar_dict, log=False):
+        if self.writer is not None and log:
+            for key, value in tag_scalar_dict.items():
+                self.writer.add_scalar(key, value)
+        self._data = self._data.append(tag_scalar_dict, ignore_index=True)
+
+    def to_dict(self):
+        return {col:self._data[col].values for col in self._data.columns}
 
     def avg(self, key):
-        return self._data.average[key]
+        return self._data.__getattr__(key).average
     
     def result(self):
-        return dict(self._data.average)
+        return dict(self._data.mean())

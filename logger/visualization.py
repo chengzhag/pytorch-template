@@ -34,17 +34,20 @@ class TensorboardWriter():
             'add_scalar', 'add_scalars', 'add_image', 'add_images', 'add_audio',
             'add_text', 'add_histogram', 'add_pr_curve', 'add_embedding'
         }
-        self.tag_mode_exceptions = {'add_histogram', 'add_embedding'}
+        self.tag_mode_exceptions = {'add_embedding'}
         self.timer = datetime.now()
 
-    def set_step(self, step, mode='train'):
+    def set_step(self, step=None, mode='train', log=False):
+        old_mode = self.mode
         self.mode = mode
-        self.step = step
-        if step == 0:
+        if step is not None:
+            self.step = step
+        if step == 0 or old_mode != self.mode:
             self.timer = datetime.now()
         else:
             duration = datetime.now() - self.timer
-            self.add_scalar('steps_per_sec', 1 / duration.total_seconds())
+            if log:
+                self.add_scalar('steps_per_sec', 1 / duration.total_seconds())
             self.timer = datetime.now()
 
     def __getattr__(self, name):
