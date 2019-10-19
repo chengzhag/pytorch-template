@@ -4,6 +4,8 @@ from torchvision.utils import make_grid
 from base import BaseTrainer
 from utils import inf_loop, MetricTracker
 from datetime import datetime, timedelta
+import wandb
+
 
 class Trainer(BaseTrainer):
     """
@@ -64,11 +66,13 @@ class Trainer(BaseTrainer):
             tic = toc
 
             if do_log:
+                eta = timedelta(seconds=eta.seconds)
                 self.logger.debug('Train Epoch: {} {}, Loss: {:.6f}, ETA: {}'.format(
                     epoch,
                     self._progress(batch_idx),
                     loss.item(),
-                    timedelta(seconds=eta.seconds)))
+                    eta))
+                wandb.run.summary['ETA'] = str(eta)
 
             if batch_idx == self.len_epoch:
                 break
@@ -103,7 +107,7 @@ class Trainer(BaseTrainer):
                 output = self.model(data)
                 loss = self.criterion(output, target)
 
-                self.writer.set_step(mode='valid', log=True)
+                self.writer.set_step(mode='valid', log=do_log)
                 tag_scalar_dict = {'loss': loss.item()}
                 tag_scalar_dict.update({met.__name__: met(output, target) for met in self.metric_ftns})
                 self.valid_metrics.update(tag_scalar_dict, log=do_log)

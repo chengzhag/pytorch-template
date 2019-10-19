@@ -10,7 +10,6 @@ from parse_config import ConfigParser
 from trainer import Trainer
 import os
 import wandb
-wandb.init(project=os.path.realpath(__file__).split('/')[-2], sync_tensorboard=True)
 
 
 # fix random seeds for reproducibility
@@ -29,7 +28,10 @@ def main(config):
 
     # build model architecture, then print to console
     model = config.init_obj('arch', module_arch)
+    wandb.init(project=os.path.realpath(__file__).split('/')[-2], sync_tensorboard=True)
     wandb.watch(model, log='all')
+    wandb.config.update(config)
+
     logger.info(model)
 
     # get function handles of loss and metrics
