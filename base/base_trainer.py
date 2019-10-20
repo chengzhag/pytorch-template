@@ -1,7 +1,8 @@
 import torch
 from abc import abstractmethod
 from numpy import inf
-from logger import TensorboardWriter
+from logger import *
+import os
 
 
 class BaseTrainer:
@@ -42,7 +43,16 @@ class BaseTrainer:
         self.checkpoint_dir = config.save_dir
 
         # setup visualization writer instance                
-        self.writer = TensorboardWriter(config.log_dir, self.logger, cfg_trainer['tensorboard'])
+        if cfg_trainer.get('tensorboard'):
+            self.writer = TensorboardWriter(config.log_dir, self.logger, cfg_trainer['tensorboard'])
+        elif cfg_trainer.get('wandb'):
+            if cfg_trainer['wandb'] == 'dryrun':
+                os.environ['WANDB_MODE'] = 'dryrun'
+            self.writer = WandbWriter(config.log_dir, self.logger, enabled=cfg_trainer['wandb'])
+            self.writer.watch(model, log='all')
+            self.writer.config.update(config)
+        else:
+            self.writer = EmptyWriter()
 
         if config.resume is not None:
             self._resume_checkpoint(config.resume)

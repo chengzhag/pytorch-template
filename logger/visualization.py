@@ -1,6 +1,55 @@
 import importlib
 from datetime import datetime
+import wandb
+import os
+from pathlib import Path
 
+
+class WandbWriter():
+    def __init__(self, log_dir, logger, enabled=True):
+        self.enabled = enabled is not False
+        self.logger = logger
+
+        if enabled:
+            log_dir = str(log_dir)
+            wandb.init(project=os.path.realpath(__file__).split('/')[-2], dir=log_dir)
+
+        self.step = 0
+        self.mode = ''
+
+        self.timer = datetime.now()
+
+
+    def set_step(self, step=None, mode='train', log=False):
+        mode_change = self.mode != mode
+        self.mode = mode
+        if step is not None:
+            self.step = step
+        if step == 0 or mode_change:
+            self.timer = datetime.now()
+        else:
+            duration = datetime.now() - self.timer
+            if log:
+                self.log({'steps_per_sec': 1 / duration.total_seconds()})
+            self.timer = datetime.now()
+
+    def __getattr__(self, name):
+        if self.enabled:
+            if name == 'log':
+                def wrapper(row=None, sync=False):
+                    # add mode(train/valid) tag
+                    row = {'{}/{}'.format(tag, self.mode): data for tag, data in row.items()}
+                    wandb.log(row, step=self.step, sync=sync)
+                return wrapper
+            else:
+                # default action for returning methods defined in this class, set_step() for instance.
+                try:
+                    attr = getattr(wandb, name)
+                except AttributeError:
+                    raise AttributeError("wandb has no attribute '{}'".format(name))
+                return attr
+        else:
+            return EmptyWriter()
 
 class TensorboardWriter():
     def __init__(self, log_dir, logger, enabled):
@@ -8,7 +57,7 @@ class TensorboardWriter():
         self.selected_module = ""
 
         if enabled:
-            log_dir = str(log_dir)
+            log_dir = Path(log_dir) / 'tensoboard'
 
             # Retrieve vizualization writer.
             succeeded = False
@@ -74,3 +123,19 @@ class TensorboardWriter():
             except AttributeError:
                 raise AttributeError("type object '{}' has no attribute '{}'".format(self.selected_module, name))
             return attr
+
+class EmptyWriter():
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def __getattr__(self, name):
+        return EmptyWriter()
+
+    def __call__(self, *args, **kwargs):
+        return EmptyWriter()
+
+    def __setitem__(self, key, value):
+        return EmptyWriter()
+
+    def __getitem__(self, item):
+        return EmptyWriter()

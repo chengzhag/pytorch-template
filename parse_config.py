@@ -28,7 +28,7 @@ class ConfigParser:
         exper_name = self.config['name']
         if run_id is None: # use timestamp as default run-id
             run_id = datetime.now().strftime(r'%m%d_%H%M%S')
-        self._save_dir = save_dir / exper_name / run_id
+        self._save_dir = save_dir / exper_name / run_id / 'checkpoints'
         self._log_dir = save_dir / exper_name / run_id
 
         # make directory for saving checkpoints and log.

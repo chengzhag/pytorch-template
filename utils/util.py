@@ -26,18 +26,14 @@ def inf_loop(data_loader):
         yield from loader
 
 class MetricTracker:
-    def __init__(self, writer=None):
-        self.writer = writer
+    def __init__(self):
         self._data = pd.DataFrame()
         self.reset()
         
     def reset(self):
         self._data = pd.DataFrame()
 
-    def update(self, tag_scalar_dict, log=False):
-        if self.writer is not None and log:
-            for key, value in tag_scalar_dict.items():
-                self.writer.add_scalar(key, value)
+    def update(self, tag_scalar_dict):
         self._data = self._data.append(tag_scalar_dict, ignore_index=True)
 
     def to_dict(self):

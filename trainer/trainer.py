@@ -4,7 +4,6 @@ from torchvision.utils import make_grid
 from base import BaseTrainer
 from utils import inf_loop, MetricTracker
 from datetime import datetime, timedelta
-import wandb
 
 
 class Trainer(BaseTrainer):
@@ -28,7 +27,7 @@ class Trainer(BaseTrainer):
         self.lr_scheduler = lr_scheduler
         self.log_step = int(np.sqrt(len(data_loader)))
 
-        self.train_metrics = MetricTracker(writer=self.writer)
+        self.train_metrics = MetricTracker()
         self.valid_metrics = MetricTracker()
 
     def _train_epoch(self, epoch):
@@ -55,7 +54,9 @@ class Trainer(BaseTrainer):
             self.writer.set_step((epoch - 1) * self.len_epoch + batch_idx, log=do_log)
             tag_scalar_dict = {'loss': loss.item()}
             tag_scalar_dict.update({met.__name__: met(output, target) for met in self.metric_ftns})
-            self.train_metrics.update(tag_scalar_dict, log=do_log)
+            self.train_metrics.update(tag_scalar_dict)
+            if do_log:
+                self.writer.log(tag_scalar_dict)
 
             toc = datetime.now()
             try:
@@ -72,12 +73,12 @@ class Trainer(BaseTrainer):
                     self._progress(batch_idx),
                     loss.item(),
                     eta))
-                wandb.run.summary['ETA'] = str(eta)
+                self.writer.run.summary['ETA'] = str(eta)
 
             if batch_idx == self.len_epoch:
                 break
 
-        self.writer.add_image('input', make_grid(data.cpu(), nrow=8, normalize=True))
+        self.writer.log({'input': self.writer.Image(make_grid(data.cpu(), nrow=8, normalize=True))})
         log = self.train_metrics.result()
 
         if self.do_validation:
@@ -110,9 +111,10 @@ class Trainer(BaseTrainer):
                 self.writer.set_step(mode='valid', log=do_log)
                 tag_scalar_dict = {'loss': loss.item()}
                 tag_scalar_dict.update({met.__name__: met(output, target) for met in self.metric_ftns})
-                self.valid_metrics.update(tag_scalar_dict, log=do_log)
+                self.valid_metrics.update(tag_scalar_dict)
                 if do_log:
-                    self.writer.add_image('input', make_grid(data.cpu(), nrow=8, normalize=True))
+                    self.writer.log(tag_scalar_dict)
+                    self.writer.log({'input': self.writer.Image(make_grid(data.cpu(), nrow=8, normalize=True))})
 
                 toc = datetime.now()
                 try:
@@ -133,12 +135,10 @@ class Trainer(BaseTrainer):
                         timedelta(seconds=eta.seconds)
                     ))
 
-        for key, value in self.valid_metrics.result().items():
-            self.writer.add_scalar(key, value)
-            
+        self.writer.log(self.valid_metrics.result())
+
         # add histogram of valid results to the tensorboard
-        for name, p in self.valid_metrics.to_dict().items():
-            self.writer.add_histogram(name + '_h', p, bins='auto')
+        self.writer.log({name + '_h': p for name, p in self.valid_metrics.to_dict().items()})
 
         return self.valid_metrics.result()
 
