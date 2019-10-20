@@ -4,6 +4,7 @@ from torchvision.utils import make_grid
 from base import BaseTrainer
 from utils import inf_loop, MetricTracker
 from datetime import datetime, timedelta
+from logger import *
 
 
 class Trainer(BaseTrainer):
@@ -56,7 +57,11 @@ class Trainer(BaseTrainer):
             tag_scalar_dict.update({met.__name__: met(output, target) for met in self.metric_ftns})
             self.train_metrics.update(tag_scalar_dict)
             if do_log:
-                self.writer.log(tag_scalar_dict)
+                if isinstance(self.writer, TensorboardWriter):
+                    for tag, scalar in tag_scalar_dict.items():
+                        self.writer.add_scalar(tag, scalar)
+                elif isinstance(self.writer, WandbWriter):
+                    self.writer.log(tag_scalar_dict)
 
             toc = datetime.now()
             try:
@@ -73,12 +78,18 @@ class Trainer(BaseTrainer):
                     self._progress(batch_idx),
                     loss.item(),
                     eta))
-                self.writer.run.summary['ETA'] = str(eta)
+                if isinstance(self.writer, TensorboardWriter):
+                    self.writer.add_scalar('ETAhours', eta.seconds/3600)
+                elif isinstance(self.writer, WandbWriter):
+                    self.writer.run.summary['ETA'] = str(eta)
 
             if batch_idx == self.len_epoch:
                 break
 
-        self.writer.log({'input': self.writer.Image(make_grid(data.cpu(), nrow=8, normalize=True))})
+        if isinstance(self.writer, TensorboardWriter):
+            self.writer.add_image('input', make_grid(data.cpu(), nrow=8, normalize=True))
+        elif isinstance(self.writer, WandbWriter):
+            self.writer.log({'input': self.writer.Image(make_grid(data.cpu(), nrow=8, normalize=True))})
         log = self.train_metrics.result()
 
         if self.do_validation:
@@ -113,8 +124,13 @@ class Trainer(BaseTrainer):
                 tag_scalar_dict.update({met.__name__: met(output, target) for met in self.metric_ftns})
                 self.valid_metrics.update(tag_scalar_dict)
                 if do_log:
-                    self.writer.log(tag_scalar_dict)
-                    self.writer.log({'input': self.writer.Image(make_grid(data.cpu(), nrow=8, normalize=True))})
+                    if isinstance(self.writer, TensorboardWriter):
+                        for tag, scalar in tag_scalar_dict.items():
+                            self.writer.add_scalar(tag, scalar)
+                        self.writer.add_image('input', make_grid(data.cpu(), nrow=8, normalize=True))
+                    elif isinstance(self.writer, WandbWriter):
+                        self.writer.log(tag_scalar_dict)
+                        self.writer.log({'input': self.writer.Image(make_grid(data.cpu(), nrow=8, normalize=True))})
 
                 toc = datetime.now()
                 try:
@@ -135,10 +151,18 @@ class Trainer(BaseTrainer):
                         timedelta(seconds=eta.seconds)
                     ))
 
-        self.writer.log(self.valid_metrics.result())
+        if isinstance(self.writer, TensorboardWriter):
+            for tag, scalar in self.valid_metrics.result().items():
+                self.writer.add_scalar(tag, scalar)
+            # add histogram of valid results to the tensorboard
+            for name, p in self.valid_metrics.to_dict().items():
+                self.writer.add_histogram(name + '_h', p, bins='auto')
 
-        # add histogram of valid results to the tensorboard
-        self.writer.log({name + '_h': p for name, p in self.valid_metrics.to_dict().items()})
+        elif isinstance(self.writer, WandbWriter):
+            self.writer.log(self.valid_metrics.result())
+
+            # add histogram of valid results to the tensorboard
+            self.writer.log({name + '_h': p for name, p in self.valid_metrics.to_dict().items()})
 
         return self.valid_metrics.result()
 
