@@ -12,13 +12,12 @@ class WandbWriter():
 
         if enabled:
             log_dir = str(log_dir)
-            wandb.init(project=os.path.realpath(__file__).split('/')[-2], dir=log_dir)
+            wandb.init(project=os.path.realpath(__file__).split('/')[-3], dir=log_dir)
 
         self.step = 0
         self.mode = ''
 
         self.timer = datetime.now()
-
 
     def set_step(self, step=None, mode='train', log=False):
         mode_change = self.mode != mode

@@ -49,7 +49,7 @@ class BaseTrainer:
             if cfg_trainer['wandb'] == 'dryrun':
                 os.environ['WANDB_MODE'] = 'dryrun'
             self.writer = WandbWriter(config.log_dir, self.logger, enabled=cfg_trainer['wandb'])
-            self.writer.watch(model, log='all')
+            self.writer.watch(model, log='all', log_freq=1000)
             self.writer.config.update(config)
         else:
             self.writer = EmptyWriter()
