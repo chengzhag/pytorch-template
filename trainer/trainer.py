@@ -54,6 +54,8 @@ class Trainer(BaseTrainer):
 
             self.writer.set_step((epoch - 1) * self.len_epoch + batch_idx, log=do_log)
             tag_scalar_dict = {'loss': loss.item()}
+            for i, params in enumerate(self.optimizer.param_groups):
+                tag_scalar_dict.update({f'lr{i}': params['lr']})
             tag_scalar_dict.update({met.__name__: met(output, target) for met in self.metric_ftns})
             self.train_metrics.update(tag_scalar_dict)
             if do_log:
